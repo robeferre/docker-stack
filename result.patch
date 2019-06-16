@@ -1,0 +1,220 @@
+From ca2efc49c753e2b423994806e4e2f13f07691153 Mon Sep 17 00:00:00 2001
+From: Roberto Ferreira Jr <robeferre@gmail.com>
+Date: Sun, 16 Jun 2019 17:10:04 -0300
+Subject: [PATCH] Docker compose done
+
+---
+ .gitignore                                    |  1 +
+ docker-compose.yml                            | 66 +++++++++++++++++++
+ hello-node/Dockerfile                         |  8 +++
+ hello-node/README.md                          | 14 ++--
+ hello-node/app.js                             |  5 +-
+ hello-python/Dockerfile                       |  9 +++
+ hello-python/app.py                           |  8 ++-
+ .../create_database.sql                       |  0
+ 8 files changed, 99 insertions(+), 12 deletions(-)
+ create mode 100644 docker-compose.yml
+ create mode 100644 hello-node/Dockerfile
+ create mode 100644 hello-python/Dockerfile
+ rename create_database.sql => mysql/create_database.sql (100%)
+
+diff --git a/.gitignore b/.gitignore
+index 9daa824..bad1964 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,2 +1,3 @@
+ .DS_Store
+ node_modules
++venv
+diff --git a/docker-compose.yml b/docker-compose.yml
+new file mode 100644
+index 0000000..4538a8b
+--- /dev/null
++++ b/docker-compose.yml
+@@ -0,0 +1,66 @@
++version: '3.7'
++services:
++
++  app:
++    network_mode: host
++    restart: always
++    build:
++      context: ./hello-python
++    ports:
++      - "4000:4000"
++    environment:
++      - RABBITMQ_HOST=127.0.0.1
++      - RABBITMQ_PORT=5672
++      - RABBITMQ_QUEUE=hello
++    depends_on:
++      - worker
++
++  worker:
++    network_mode: host
++    restart: always
++    build:
++      context: ./hello-node
++    ports:
++      - "8888:8888"
++    environment:
++      - RABBITMQ_HOST=127.0.0.1
++      - RABBITMQ_PORT=5672
++      - RABBITMQ_QUEUE=hello
++      - MYSQL_HOST=127.0.0.1
++      - MYSQL_USER=root
++      - MYSQL_PASSWORD=5andar
++      - MYSQL_DB=hello
++    depends_on:
++      - queue
++
++  queue:
++    image: "rabbitmq:3.7.15-alpine"
++    restart: always
++    hostname: "rabbit1"
++    environment:
++      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
++      RABBITMQ_DEFAULT_USER: "guest"
++      RABBITMQ_DEFAULT_PASS: "guest"
++      RABBITMQ_DEFAULT_VHOST: "/"
++    ports:
++      - "15672:15672"
++      - "5672:5672"
++    labels:
++      NAME: "rabbitmq1"
++    depends_on:
++      - database
++
++  database:
++    image: "mysql"
++    restart: always
++    ports:
++      - "3306:3306"
++    restart: always
++    volumes:
++      - ./mysql/:/docker-entrypoint-initdb.d:rw
++    command: --default-authentication-plugin=mysql_native_password
++    environment:
++      MYSQL_ROOT_PASSWORD: 5andar
++#
++# networks:
++#   default:
+diff --git a/hello-node/Dockerfile b/hello-node/Dockerfile
+new file mode 100644
+index 0000000..a062633
+--- /dev/null
++++ b/hello-node/Dockerfile
+@@ -0,0 +1,8 @@
++FROM node:8-alpine
++
++WORKDIR /app
++COPY package*.json ./
++RUN npm install
++COPY . .
++
++CMD [ "npm", "start" ]
+diff --git a/hello-node/README.md b/hello-node/README.md
+index 6765829..0ca95b8 100644
+--- a/hello-node/README.md
++++ b/hello-node/README.md
+@@ -13,13 +13,13 @@ npm install
+ Configure the application:
+ 
+ ```
+-export RABBITMQ_HOST = [ rabbitmq host address ]
+-export RABBITMQ_PORT = [ rabbitmq port ]
+-export RABBITMQ_QUEUE = hello
+-export MYSQL_HOST = [ database host ]
+-export MYSQL_USER = [ database user ]
+-export MYSQL_PASSWORD = [ database password ]
+-export MYSQL_DB = hello
++export RABBITMQ_HOST=127.0.0.1
++export RABBITMQ_PORT=5672
++export RABBITMQ_QUEUE=hello
++export MYSQL_HOST=127.0.0.1
++export MYSQL_USER=root
++export MYSQL_PASSWORD=5andar
++export MYSQL_DB=hello
+ ```
+ 
+ Run the app localy:
+diff --git a/hello-node/app.js b/hello-node/app.js
+index 0f12b22..b386035 100644
+--- a/hello-node/app.js
++++ b/hello-node/app.js
+@@ -19,7 +19,8 @@ console.log(
+   RABBITMQ_PORT
+ );
+ 
+-var url = "amqp://" + RABBITMQ_HOST + RABBITMQ_PORT;
++var url = "amqp://" + RABBITMQ_HOST + ":" + RABBITMQ_PORT;
++  console.log(url)
+ amqp.connect(url, function(err, conn) {
+   console.log("Connected to RabbitMQ at %s", url);
+ 
+@@ -34,7 +35,7 @@ amqp.connect(url, function(err, conn) {
+         console.log("Received message: %s", msg);
+ 
+         db.query(
+-          "INSERT INTO table SET ?",
++          "INSERT INTO Messages SET ?",
+           { message: msg.content.toString() },
+           function(err, result) {
+             if (err) throw err;
+diff --git a/hello-python/Dockerfile b/hello-python/Dockerfile
+new file mode 100644
+index 0000000..b14e588
+--- /dev/null
++++ b/hello-python/Dockerfile
+@@ -0,0 +1,9 @@
++FROM python:3.6
++
++WORKDIR /app
++COPY requirements.txt requirements.txt
++RUN pip install -r requirements.txt
++COPY . .
++EXPOSE 4000
++
++CMD ["python", "app.py"]
+diff --git a/hello-python/app.py b/hello-python/app.py
+index 8ffa61b..bf60f56 100644
+--- a/hello-python/app.py
++++ b/hello-python/app.py
+@@ -1,5 +1,6 @@
+ import os, pika
+ from flask import Flask, request, jsonify
++import pdb
+ 
+ app = Flask(__name__)
+ 
+@@ -7,8 +8,8 @@ host = os.getenv("RABBITMQ_HOST", "localhost")
+ port = os.getenv("RABBITMQ_PORT", 5672)
+ queue = os.getenv("RABBITMQ_QUEUE", "hello")
+ 
+-html = """ 
+-<br>Type your favourite <i>pudim</i> flavour: 
++html = """
++<br>Type your favourite <i>pudim</i> flavour:
+ <br>
+ <form method='POST' action='/'>
+     <input type='text' name='flavour'>
+@@ -21,6 +22,7 @@ html = """
+ def index():
+     if request.method == 'POST':
+         app.logger.info(request.form.get("flavour"))
++        enqueue(request.form.get("flavour"))
+     return html
+ 
+ 
+@@ -42,4 +44,4 @@ def enqueue(value):
+ 
+ 
+ if __name__ == "__main__":
+-    app.run(debug=True, host="0.0.0.0", port=8000)
++    app.run(debug=True, host="0.0.0.0", port=4000)
+diff --git a/create_database.sql b/mysql/create_database.sql
+similarity index 100%
+rename from create_database.sql
+rename to mysql/create_database.sql
+-- 
+2.17.1
+
