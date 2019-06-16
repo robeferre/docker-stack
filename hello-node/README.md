@@ -13,13 +13,13 @@ npm install
 Configure the application:
 
 ```
-export RABBITMQ_HOST = [ rabbitmq host address ]
-export RABBITMQ_PORT = [ rabbitmq port ]
-export RABBITMQ_QUEUE = hello
-export MYSQL_HOST = [ database host ]
-export MYSQL_USER = [ database user ]
-export MYSQL_PASSWORD = [ database password ]
-export MYSQL_DB = hello
+export RABBITMQ_HOST=127.0.0.1
+export RABBITMQ_PORT=5672
+export RABBITMQ_QUEUE=hello
+export MYSQL_HOST=127.0.0.1
+export MYSQL_USER=root
+export MYSQL_PASSWORD=5andar
+export MYSQL_DB=hello
 ```
 
 Run the app localy:

@@ -1,0 +1,66 @@
+version: '3.7'
+services:
+
+  app:
+    network_mode: host
+    restart: always
+    build:
+      context: ./hello-python
+    ports:
+      - "4000:4000"
+    environment:
+      - RABBITMQ_HOST=127.0.0.1
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_QUEUE=hello
+    depends_on:
+      - worker
+
+  worker:
+    network_mode: host
+    restart: always
+    build:
+      context: ./hello-node
+    ports:
+      - "8888:8888"
+    environment:
+      - RABBITMQ_HOST=127.0.0.1
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_QUEUE=hello
+      - MYSQL_HOST=127.0.0.1
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=5andar
+      - MYSQL_DB=hello
+    depends_on:
+      - queue
+
+  queue:
+    image: "rabbitmq:3.7.15-alpine"
+    restart: always
+    hostname: "rabbit1"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
+      RABBITMQ_DEFAULT_USER: "guest"
+      RABBITMQ_DEFAULT_PASS: "guest"
+      RABBITMQ_DEFAULT_VHOST: "/"
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    labels:
+      NAME: "rabbitmq1"
+    depends_on:
+      - database
+
+  database:
+    image: "mysql"
+    restart: always
+    ports:
+      - "3306:3306"
+    restart: always
+    volumes:
+      - ./mysql/:/docker-entrypoint-initdb.d:rw
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: 5andar
+#
+# networks:
+#   default:

@@ -19,7 +19,8 @@ console.log(
   RABBITMQ_PORT
 );
 
-var url = "amqp://" + RABBITMQ_HOST + RABBITMQ_PORT;
+var url = "amqp://" + RABBITMQ_HOST + ":" + RABBITMQ_PORT;
+  console.log(url)
 amqp.connect(url, function(err, conn) {
   console.log("Connected to RabbitMQ at %s", url);
 
@@ -34,7 +35,7 @@ amqp.connect(url, function(err, conn) {
         console.log("Received message: %s", msg);
 
         db.query(
-          "INSERT INTO table SET ?",
+          "INSERT INTO Messages SET ?",
           { message: msg.content.toString() },
           function(err, result) {
             if (err) throw err;
